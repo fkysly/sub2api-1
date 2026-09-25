@@ -2316,7 +2316,13 @@ const (
 // 三态：default（跟随渠道）/ enabled（强制开启）/ disabled（强制关闭）。
 // 兼容旧 bool 值：true→enabled, false→default（并记录 debug 日志）。
 func (a *Account) GetWebSearchEmulationMode() string {
-	if a == nil || a.Platform != PlatformAnthropic || a.Type != AccountTypeAPIKey || a.Extra == nil {
+	// Platform is deliberately NOT part of this gate. Emulation is intercepted
+	// before protocol dispatch (gateway_forward.go), so it behaves identically
+	// for an Anthropic passthrough account and for a non-Anthropic one
+	// forwarding over chat_completions. Requiring PlatformAnthropic made the
+	// per-account override unreachable for exactly the accounts that have no
+	// upstream web search of their own — which is when it is needed most.
+	if a == nil || a.Type != AccountTypeAPIKey || a.Extra == nil {
 		return WebSearchModeDefault
 	}
 	raw := a.Extra[featureKeyWebSearchEmulation]
