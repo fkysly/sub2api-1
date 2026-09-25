@@ -30,10 +30,12 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
-	if apiKey.Group.Platform != service.PlatformOpenAI && apiKey.Group.Platform != service.PlatformComposite {
-		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Codex alpha search is only available for OpenAI and Composite groups")
-		return
-	}
+	// 非 OpenAI/Composite 分组没有能承接 alpha/search 的上游账号（能力判定与
+	// 调度器都按 PlatformOpenAI 过滤），原本在这里直接 404。改为先读完 body，
+	// 再交给自建搜索服务试着应答——Codex 的独立搜索请求本身不需要上游模型。
+	// 判定与兜底见 body 校验之后。
+	needsLocalSearchFallback := apiKey.Group.Platform != service.PlatformOpenAI &&
+		apiKey.Group.Platform != service.PlatformComposite
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
@@ -66,6 +68,16 @@ func (h *OpenAIGatewayHandler) AlphaSearch(c *gin.Context) {
 	if !gjson.ValidBytes(body) {
 		logRequestBodyParseFailure(reqLog, body, nil)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
+
+	if needsLocalSearchFallback {
+		// 自建搜索可用时就地应答，Codex 于是也有了独立搜索能力；否则维持原来的
+		// 404（全局模拟未开、请求里没有可搜的查询、或 manager 未初始化）。
+		if h.gatewayService.TryEmulateCodexAlphaSearch(c.Request.Context(), c, body) {
+			return
+		}
+		h.errorResponse(c, http.StatusNotFound, "not_found_error", "Codex alpha search is only available for OpenAI and Composite groups")
 		return
 	}
 

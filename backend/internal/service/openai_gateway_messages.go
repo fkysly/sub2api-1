@@ -33,6 +33,14 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	promptCacheKey string,
 	defaultMappedModel string,
 ) (*OpenAIForwardResult, error) {
+	// Web Search 模拟：纯 web_search 子请求由搜索 provider 直接应答，不走上游。
+	// 触发条件极窄（tools 恰好一个且为 web_search），Claude Code 的普通回合带
+	// 几十个工具，永远不命中，所以这条分支不会影响既有流量。
+	if account != nil &&
+		s.shouldEmulateWebSearchForOpenAI(ctx, account, getOpenAIGroupIDFromContext(c), body) {
+		return s.handleWebSearchEmulationForOpenAI(ctx, c, account, body, "")
+	}
+
 	// 工具 Schema 清洗必须先于所有分流：下游每条路径（原生 Anthropic 直通、
 	// Chat Completions 转换、Responses 转换）都会把 tools 原样带给上游，而
 	// xAI / Moonshot 等严格校验方会因 input_schema 里的 required:null 或
