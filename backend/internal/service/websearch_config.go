@@ -60,14 +60,13 @@ func validateWebSearchConfig(cfg *WebSearchEmulationConfig) error {
 		if p.QuotaLimit != nil && *p.QuotaLimit < 0 {
 			return fmt.Errorf("provider[%d]: quota_limit must be > 0 or null", i)
 		}
-		// SearXNG has no key to authenticate with; the address of the instance is
-		// what it cannot work without. Brave/Tavily are the mirror image.
-		if p.Type == websearch.ProviderTypeSearxng {
-			if strings.TrimSpace(p.BaseURL) == "" {
-				return fmt.Errorf("provider[%d]: searxng requires base_url", i)
-			}
-		} else if strings.TrimSpace(p.APIKey) == "" {
-			return fmt.Errorf("provider[%d]: %s requires api_key", i, p.Type)
+		// SearXNG has no key to authenticate with, so the instance address is what
+		// it cannot work without. The keyed providers are deliberately NOT checked
+		// here: their keys arrive later, via mergeExistingAPIKeys, because the
+		// admin API never echoes secrets back — and SaveWebSearchEmulationConfig
+		// enforces them after that merge.
+		if p.Type == websearch.ProviderTypeSearxng && strings.TrimSpace(p.BaseURL) == "" {
+			return fmt.Errorf("provider[%d]: searxng requires base_url", i)
 		}
 		if seen[p.Type] {
 			return fmt.Errorf("provider[%d]: duplicate type %q", i, p.Type)
