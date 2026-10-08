@@ -92,7 +92,9 @@ func TestGetWebSearchEmulationMode_NonAnthropicPlatform(t *testing.T) {
 		Type:     AccountTypeAPIKey,
 		Extra:    map[string]any{featureKeyWebSearchEmulation: "enabled"},
 	}
-	require.Equal(t, WebSearchModeDefault, a.GetWebSearchEmulationMode())
+	// Local patch: platform is no longer part of the gate, so the per-account
+	// override is honoured for non-Anthropic API-key accounts too.
+	require.Equal(t, WebSearchModeEnabled, a.GetWebSearchEmulationMode())
 }
 
 func TestGetWebSearchEmulationMode_NonAPIKeyType(t *testing.T) {
